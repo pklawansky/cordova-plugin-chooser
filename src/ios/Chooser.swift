@@ -15,6 +15,7 @@ class Chooser : CDVPlugin {
 		let picker = ChooserUIDocumentPickerViewController(documentTypes: utis, in: .import)
 		picker.delegate = self
 		picker.includeData = includeData
+		picker.allowsMultipleSelection = true // Allow multiple file selection
 		self.viewController.present(picker, animated: true, completion: nil)
 	}
 
@@ -35,54 +36,57 @@ class Chooser : CDVPlugin {
 		return "application/octet-stream"
 	}
 
-	func documentWasSelected (includeData: Bool, url: URL) {
+	func documentWasSelected (includeData: Bool, urls: [URL]) {
 		var error: NSError?
 
-		NSFileCoordinator().coordinate(
-			readingItemAt: url,
-			options: [],
-			error: &error
-		) { newURL in
-			let maybeData = try? Data(contentsOf: newURL, options: [])
+		for url in urls {
 
-			guard let data = maybeData else {
-				self.sendError("Failed to fetch data.")
-				return
-			}
+			NSFileCoordinator().coordinate(
+				readingItemAt: url,
+				options: [],
+				error: &error
+			) { newURL in
+				let maybeData = try? Data(contentsOf: newURL, options: [])
 
-			do {
-				let result = [
-					"data": includeData ? data.base64EncodedString() : "",
-					"mediaType": self.detectMimeType(newURL),
-					"name": newURL.lastPathComponent,
-					"uri": newURL.absoluteString
-				]
-
-				if let message = try String(
-					data: JSONSerialization.data(
-						withJSONObject: result,
-						options: []
-					),
-					encoding: String.Encoding.utf8
-				) {
-					self.send(message)
-				}
-				else {
-					self.sendError("Serializing result failed.")
+				guard let data = maybeData else {
+					self.sendError("Failed to fetch data.")
+					return
 				}
 
-				newURL.stopAccessingSecurityScopedResource()
+				do {
+					let result = [
+						"data": includeData ? data.base64EncodedString() : "",
+						"mediaType": self.detectMimeType(newURL),
+						"name": newURL.lastPathComponent,
+						"uri": newURL.absoluteString
+					]
+
+					if let message = try String(
+						data: JSONSerialization.data(
+							withJSONObject: result,
+							options: []
+						),
+						encoding: String.Encoding.utf8
+					) {
+						self.send(message)
+					}
+					else {
+						self.sendError("Serializing result failed.")
+					}
+
+					newURL.stopAccessingSecurityScopedResource()
+				}
+				catch let error {
+					self.sendError(error.localizedDescription)
+				}
 			}
-			catch let error {
+
+			if let error = error {
 				self.sendError(error.localizedDescription)
 			}
-		}
 
-		if let error = error {
-			self.sendError(error.localizedDescription)
+			url.stopAccessingSecurityScopedResource()
 		}
-
-		url.stopAccessingSecurityScopedResource()
 	}
 
 	@objc(getFile:)
@@ -157,17 +161,15 @@ extension Chooser : UIDocumentPickerDelegate {
 		didPickDocumentsAt urls: [URL]
 	) {
 		let picker = controller as! ChooserUIDocumentPickerViewController
-		if let url = urls.first {
-			self.documentWasSelected(includeData: picker.includeData, url: url)
-		}
+		self.documentWasSelected(includeData: picker.includeData, urls: urls)
 	}
 
 	func documentPicker (
 		_ controller: UIDocumentPickerViewController,
-		didPickDocumentAt url: URL
+		didPickDocumentAt urls: [URL]
 	) {
 		let picker = controller as! ChooserUIDocumentPickerViewController
-		self.documentWasSelected(includeData: picker.includeData, url: url)
+		self.documentWasSelected(includeData: picker.includeData, urls: urls)
 	}
 
 	func documentPickerWasCancelled (_ controller: UIDocumentPickerViewController) {

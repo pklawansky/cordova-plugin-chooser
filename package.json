@@ -5,7 +5,7 @@
 	"main": "index.js",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/cyph/cordova-plugin-chooser.git"
+		"url": "git+https://github.com/pklawansky/cordova-plugin-chooser.git"
 	},
 	"keywords": [
 		"file",
